@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Map Creator</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            user-select: none;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        button {
+            padding: 8px 12px;
+            background: #2a2a2a;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button.active {
+            background: #4a8fe7;
+        }
+        button:hover {
+            background: #3a3a3a;
+        }
+        #controls {
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .color-picker {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        input[type="color"] {
+            width: 30px;
+            height: 30px;
+            border: none;
+            padding: 0;
+            background: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas"></div>
+        <div id="ui">
+            <h3 style="margin: 0 0 10px 0;">Map Creator</h3>
+            <div class="toolbar">
+                <button id="terrainBtn">Terrain</button>
+                <button id="buildingBtn">Building</button>
+                <button id="roadBtn">Road</button>
+                <button id="treeBtn">Tree</button>
+                <button id="bushBtn">Bush</button>
+                <button id="carBtn">Car</button>
+                <button id="deleteBtn">Delete</button>
+            </div>
+            <div class="color-picker">
+                <label>Color:</label>
+                <input type="color" id="colorPicker" value="#4a8fe7">
+            </div>
+            <div id="controls">
+                <p>Left click: Place object</p>
+                <p>Right click: Rotate object</p>
+                <p>WASD: Move camera</p>
+                <p>Mouse drag: Look around</p>
+                <p>Scroll: Zoom in/out</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        
+        // Main application class
+        class MapCreator {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                
+                // Set up Three.js scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+                
+                // Set up camera
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(10, 10, 10);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Set up renderer
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.canvas.appendChild(this.renderer.domElement);
+                
+                // Set up controls
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                
+                // Set up raycaster for object placement
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                
+                // Set up lighting
+                this.setupLights();
+                
+                // Create ground plane
+                this.createGround();
+                
+                // Object collections
+                this.objects = [];
+                
+                // Current tool state
+                this.currentTool = 'terrain';
+                this.color = '#4a8fe7';
+                
+                // Event listeners
+                window.addEventListener('resize', this.onWindowResize.bind(this));
+                this.renderer.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
+                this.renderer.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
+                
+                // UI setup
+                this.setupUI();
+                
+                // Start animation loop
+                this.animate();
+            }
+            
+            setupLights() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambientLight);
+                
+                // Directional light (sun)
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                directionalLight.position.set(5, 10, 7.5);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.near = 0.5;
+                directionalLight.shadow.camera.far = 50;
+                directionalLight.shadow.camera.left = -20;
+                directionalLight.shadow.camera.right = 20;
+                directionalLight.shadow.camera.top = 20;
+                directionalLight.shadow.camera.bottom = -20;
+                this.scene.add(directionalLight);
+            }
+            
+            createGround() {
+                // Create ground geometry (large flat plane)
+                const groundGeometry = new THREE.PlaneGeometry(100, 100);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x7cba74, 
+                    roughness: 0.8,
+                });
+                this.ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                this.ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+                this.ground.receiveShadow = true;
+                this.scene.add(this.ground);
+                
+                // Create grid helper
+                const gridHelper = new THREE.GridHelper(100, 100, 0x000000, 0x888888);
+                gridHelper.position.y = 0.01; // Slight offset to prevent z-fighting
+                this.scene.add(gridHelper);
+            }
+            
+            setupUI() {
+                // Tool buttons
+                document.getElementById('terrainBtn').addEventListener('click', () => this.setTool('terrain'));
+                document.getElementById('buildingBtn').addEventListener('click', () => this.setTool('building'));
+                document.getElementById('roadBtn').addEventListener('click', () => this.setTool('road'));
+                document.getElementById('treeBtn').addEventListener('click', () => this.setTool('tree'));
+                document.getElementById('bushBtn').addEventListener('click', () => this.setTool('bush'));
+                document.getElementById('carBtn').addEventListener('click', () => this.setTool('car'));
+                document.getElementById('deleteBtn').addEventListener('click', () => this.setTool('delete'));
+                
+                // Color picker
+                document.getElementById('colorPicker').addEventListener('input', (e) => {
+                    this.color = e.target.value;
+                });
+                
+                // Mark the default tool as active
+                document.getElementById('terrainBtn').classList.add('active');
+            }
+            
+            setTool(tool) {
+                this.currentTool = tool;
+                
+                // Update UI to show active tool
+                document.querySelectorAll('#ui button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.getElementById(`${tool}Btn`).classList.add('active');
+            }
+            
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            onMouseMove(event) {
+                // Calculate mouse position in normalized device coordinates
+                this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            }
+            
+            onMouseDown(event) {
+                // Handle left click (place object)
+                if (event.button === 0) {
+                    this.placeObject();
+                }
+                // Handle right click (rotate object)
+                else if (event.button === 2) {
+                    event.preventDefault();
+                    this.rotateObject();
+                }
+            }
+            
+            placeObject() {
+                // Cast a ray from the camera through the mouse position
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                
+                // Check for intersections with the ground or existing objects
+                const intersects = this.raycaster.intersectObjects([this.ground, ...this.objects], false);
+                
+                if (intersects.length > 0) {
+                    const intersect = intersects[0];
+                    
+                    // If delete tool is active, remove the clicked object
+                    if (this.currentTool === 'delete') {
+                        if (intersect.object !== this.ground) {
+                            this.scene.remove(intersect.object);
+                            this.objects = this.objects.filter(obj => obj !== intersect.object);
+                        }
+                        return;
+                    }
+                    
+                    // Create object based on the current tool
+                    let object;
+                    
+                    switch (this.currentTool) {
+                        case 'terrain':
+                            object = this.createTerrain(intersect.point);
+                            break;
+                        case 'building':
+                            object = this.createBuilding(intersect.point);
+                            break;
+                        case 'road':
+                            object = this.createRoad(intersect.point);
+                            break;
+                        case 'tree':
+                            object = this.createTree(intersect.point);
+                            break;
+                        case 'bush':
+                            object = this.createBush(intersect.point);
+                            break;
+                        case 'car':
+                            object = this.createCar(intersect.point);
+                            break;
+                    }
+                    
+                    if (object) {
+                        this.scene.add(object);
+                        this.objects.push(object);
+                    }
+                }
+            }
+            
+            rotateObject() {
+                // Cast a ray to find object to rotate
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.objects, false);
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    
+                    // Rotate 90 degrees around Y axis
+                    object.rotation.y += Math.PI / 2;
+                }
+            }
+            
+            createTerrain(position) {
+                const size = 5;
+                const height = 1 + Math.random() * 2;
+                
+                // Create a simple hill/terrain feature
+                const geometry = new THREE.ConeGeometry(size, height, 4);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(this.color),
+                    roughness: 0.8,
+                });
+                
+                const terrain = new THREE.Mesh(geometry, material);
+                terrain.position.copy(position);
+                terrain.position.y = height / 2;
+                terrain.castShadow = true;
+                terrain.receiveShadow = true;
+                
+                return terrain;
+            }
+            
+            createBuilding(position) {
+                const width = 2 + Math.random() * 2;
+                const depth = 2 + Math.random() * 2;
+                const height = 3 + Math.random() * 5;
+                
+                // Create building
+                const geometry = new THREE.BoxGeometry(width, height, depth);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(this.color),
+                    roughness: 0.7,
+                });
+                
+                const building = new THREE.Mesh(geometry, material);
+                building.position.copy(position);
+                building.position.y = height / 2;
+                building.castShadow = true;
+                building.receiveShadow = true;
+                
+                return building;
+            }
+            
+            createRoad(position) {
+                const width = 5;
+                const depth = 1;
+                const height = 0.1;
+                
+                // Create road segment
+                const geometry = new THREE.BoxGeometry(width, height, depth);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    roughness: 0.9,
+                });
+                
+                const road = new THREE.Mesh(geometry, material);
+                road.position.copy(position);
+                road.position.y = height / 2;
+                road.receiveShadow = true;
+                
+                // Add road markings
+                const lineGeometry = new THREE.BoxGeometry(width * 0.4, height * 1.1, depth * 0.1);
+                const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const line = new THREE.Mesh(lineGeometry, lineMaterial);
+                line.position.y = height * 0.1;
+                road.add(line);
+                
+                return road;
+            }
+            
+            createTree(position) {
+                // Create tree trunk
+                const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
+                const trunkMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    roughness: 0.9,
+                });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.copy(position);
+                trunk.position.y = 0.75;
+                trunk.castShadow = true;
+                trunk.receiveShadow = true;
+                
+                // Create tree canopy
+                const canopyGeometry = new THREE.ConeGeometry(1, 2.5, 8);
+                const canopyMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x228B22,
+                    roughness: 0.8,
+                });
+                const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
+                canopy.position.y = 2.5;
+                canopy.castShadow = true;
+                trunk.add(canopy);
+                
+                return trunk;
+            }
+            
+            createBush(position) {
+                // Create bush as a sphere
+                const geometry = new THREE.SphereGeometry(0.7, 8, 6);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x228B22,
+                    roughness: 0.8,
+                });
+                
+                const bush = new THREE.Mesh(geometry, material);
+                bush.position.copy(position);
+                bush.position.y = 0.7;
+                bush.scale.y = 0.8;
+                bush.castShadow = true;
+                bush.receiveShadow = true;
+                
+                return bush;
+            }
+            
+            createCar(position) {
+                // Car group
+                const car = new THREE.Group();
+                car.position.copy(position);
+                car.position.y = 0.6;
+                
+                // Car body
+                const bodyGeometry = new THREE.BoxGeometry(2, 0.7, 1);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(this.color),
+                    roughness: 0.5,
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.castShadow = true;
+                body.receiveShadow = true;
+                car.add(body);
+                
+                // Car roof
+                const roofGeometry = new THREE.BoxGeometry(1.2, 0.5, 0.9);
+                const roof = new THREE.Mesh(roofGeometry, bodyMaterial);
+                roof.position.y = 0.6;
+                roof.position.x = -0.1;
+                roof.castShadow = true;
+                car.add(roof);
+                
+                // Wheels
+                const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
+                wheelGeometry.rotateX(Math.PI / 2);
+                const wheelMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x111111,
+                    roughness: 0.9,
+                });
+                
+                // Front left wheel
+                const wheelFL = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheelFL.position.set(0.7, -0.3, 0.5);
+                car.add(wheelFL);
+                
+                // Front right wheel
+                const wheelFR = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheelFR.position.set(0.7, -0.3, -0.5);
+                car.add(wheelFR);
+                
+                // Rear left wheel
+                const wheelRL = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheelRL.position.set(-0.7, -0.3, 0.5);
+                car.add(wheelRL);
+                
+                // Rear right wheel
+                const wheelRR = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheelRR.position.set(-0.7, -0.3, -0.5);
+                car.add(wheelRR);
+                
+                return car;
+            }
+            
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+                
+                // Update controls
+                this.controls.update();
+                
+                // Render scene
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Initialize the application when page loads
+        window.addEventListener('load', () => {
+            const app = new MapCreator();
+            
+            // Prevent context menu on right-click
+            window.addEventListener('contextmenu', (e) => e.preventDefault());
+        });
+    </script>
+</body>
+</html>
