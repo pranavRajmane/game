@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Custom JSON Map Navigator</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        #toggleMode {
+            position: absolute;
+            top: 10px;
+            right: 80px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #loadMapBtn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #mapFileInput {
+            display: none;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 200;
+        }
+        #mapEditor {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 300;
+            width: 80%;
+            max-width: 800px;
+            height: 80%;
+            display: none;
+            flex-direction: column;
+        }
+        #mapJSON {
+            flex-grow: 1;
+            width: 100%;
+            height: calc(100% - 100px);
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+            margin-bottom: 10px;
+            resize: none;
+        }
+        #editorButtons {
+            display: flex;
+            justify-content: space-between;
+        }
+        .mapBtn {
+            padding: 10px;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .mapBtn:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>Three.js Custom JSON Map Navigator</h3>
+        <p>Current Mode: <span id="modeDisplay">Walking</span></p>
+    </div>
+    <div id="controls">
+        <p><strong>Controls:</strong></p>
+        <p>W, A, S, D - Move</p>
+        <p>Mouse - Look around</p>
+        <p>Space - Jump/Fly up</p>
+        <p>Shift - Descend (in flying mode)</p>
+        <p>E - Toggle between walking/flying mode</p>
+        <p>M - Open map editor</p>
+    </div>
+    <button id="toggleMode">Toggle Mode</button>
+    <button id="loadMapBtn">Load Map</button>
+    <input type="file" id="mapFileInput" accept=".json">
+    <div id="loading">Loading default map... Please wait.</div>
+    
+    <div id="mapEditor">
+        <h3>Map JSON Editor</h3>
+        <p>Edit your map JSON here or paste a new one:</p>
+        <textarea id="mapJSON"></textarea>
+        <div id="editorButtons">
+            <button class="mapBtn" id="saveMapBtn">Save & Load Map</button>
+            <button class="mapBtn" id="downloadMapBtn">Download JSON</button>
+            <button class="mapBtn" id="closeEditorBtn">Close Editor</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Main application
+        const app = {
+            scene: null,
+            camera: null,
+            renderer: null,
+            controls: {
+                moveForward: false,
+                moveBackward: false,
+                moveLeft: false,
+                moveRight: false,
+                moveUp: false,
+                moveDown: false,
+                enabled: false
+            },
+            velocity: new THREE.Vector3(),
+            direction: new THREE.Vector3(),
+            raycaster: new THREE.Raycaster(),
+            clock: new THREE.Clock(),
+            player: {
+                height: 1.8,
+                speed: 10.0,
+                jumpHeight: 20,
+                gravity: 30.0,
+                flying: false,
+                canJump: false
+            },
+            map: {
+                objects: [],
+                data: null
+            },
+            init: function() {
+                // Create scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+                this.scene.fog = new THREE.Fog(0x87ceeb, 10, 100);
+                
+                // Create camera
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.y = this.player.height;
+                
+                // Create renderer
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                document.body.appendChild(this.renderer.domElement);
+                
+                // Add lights
+                const ambientLight = new THREE.AmbientLight(0x404040);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(1, 1, 0.5).normalize();
+                directionalLight.castShadow = true;
+                this.scene.add(directionalLight);
+                
+                // Setup input handlers
+                this.setupPointerLock();
+                this.setupMapLoader();
+                
+                // Load the default map
+                this.loadDefaultMap();
+                
+                // Add event listeners
+                window.addEventListener('resize', this.onWindowResize.bind(this), false);
+                document.addEventListener('keydown', this.onKeyDown.bind(this), false);
+                document.addEventListener('keyup', this.onKeyUp.bind(this), false);
+
+                // Toggle mode button
+                document.getElementById('toggleMode').addEventListener('click', this.toggleFlyingMode.bind(this));
+
+                // Start animation loop
+                this.animate();
+            },
+            
+            setupPointerLock: function() {
+                const element = document.body;
+                
+                const pointerlockchange = (event) => {
+                    if (document.pointerLockElement === element) {
+                        this.controls.enabled = true;
+                    } else {
+                        this.controls.enabled = false;
+                    }
+                };
+                
+                const pointerlockerror = (event) => {
+                    console.error('Pointer lock error');
+                };
+                
+                document.addEventListener('pointerlockchange', pointerlockchange, false);
+                document.addEventListener('pointerlockerror', pointerlockerror, false);
+                
+                element.addEventListener('click', (event) => {
+                    // Don't capture clicks on UI elements
+                    if (event.target.tagName === 'BUTTON' || 
+                        event.target.tagName === 'INPUT' || 
+                        event.target.tagName === 'TEXTAREA' ||
+                        event.target.id === 'mapEditor') {
+                        return;
+                    }
+                    
+                    if (document.getElementById('mapEditor').style.display === 'flex') {
+                        return;
+                    }
+                    
+                    element.requestPointerLock();
+                }, false);
+                
+                // Mouse movement for looking around
+                let prevX = 0, prevY = 0;
+                let euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                document.addEventListener('mousemove', (event) => {
+                    if (document.pointerLockElement === element) {
+                        // Calculate mouse movement and apply to camera rotation
+                        const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+                        const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+                        
+                        euler.setFromQuaternion(this.camera.quaternion);
+                        euler.y -= movementX * 0.002;
+                        euler.x -= movementY * 0.002;
+                        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+                        this.camera.quaternion.setFromEuler(euler);
+                    }
+                }, false);
+            },
+            
+            setupMapLoader: function() {
+                const fileInput = document.getElementById('mapFileInput');
+                const loadBtn = document.getElementById('loadMapBtn');
+                const saveMapBtn = document.getElementById('saveMapBtn');
+                const downloadMapBtn = document.getElementById('downloadMapBtn');
+                const closeEditorBtn = document.getElementById('closeEditorBtn');
+                const mapEditor = document.getElementById('mapEditor');
+                const mapJSON = document.getElementById('mapJSON');
+                
+                // Load map button
+                loadBtn.addEventListener('click', () => {
+                    fileInput.click();
+                });
+                
+                // File input change
+                fileInput.addEventListener('change', (event) => {
+                    if (event.target.files.length > 0) {
+                        const file = event.target.files[0];
+                        const reader = new FileReader();
+                        
+                        reader.onload = (e) => {
+                            try {
+                                const jsonData = JSON.parse(e.target.result);
+                                mapJSON.value = JSON.stringify(jsonData, null, 2);
+                                this.loadMapFromJSON(jsonData);
+                            } catch (error) {
+                                alert('Error parsing JSON: ' + error.message);
+                            }
+                        };
+                        
+                        reader.readAsText(file);
+                    }
+                });
+                
+                // Map editor functionality
+                document.addEventListener('keydown', (event) => {
+                    if (event.code === 'KeyM' && !event.repeat) {
+                        this.toggleMapEditor();
+                    }
+                });
+                
+                // Save and load map
+                saveMapBtn.addEventListener('click', () => {
+                    try {
+                        const jsonData = JSON.parse(mapJSON.value);
+                        this.loadMapFromJSON(jsonData);
+                        mapEditor.style.display = 'none';
+                        if (document.pointerLockElement === null) {
+                            document.body.requestPointerLock();
+                        }
+                    } catch (error) {
+                        alert('Error parsing JSON: ' + error.message);
+                    }
+                });
+                
+                // Download map
+                downloadMapBtn.addEventListener('click', () => {
+                    try {
+                        const jsonData = JSON.parse(mapJSON.value);
+                        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(jsonData, null, 2));
+                        const downloadAnchorNode = document.createElement('a');
+                        downloadAnchorNode.setAttribute("href", dataStr);
+                        downloadAnchorNode.setAttribute("download", "map.json");
+                        document.body.appendChild(downloadAnchorNode);
+                        downloadAnchorNode.click();
+                        downloadAnchorNode.remove();
+                    } catch (error) {
+                        alert('Error parsing JSON: ' + error.message);
+                    }
+                });
+                
+                // Close editor
+                closeEditorBtn.addEventListener('click', () => {
+                    mapEditor.style.display = 'none';
+                    if (document.pointerLockElement === null) {
+                        document.body.requestPointerLock();
+                    }
+                });
+            },
+            
+            toggleMapEditor: function() {
+                const mapEditor = document.getElementById('mapEditor');
+                const mapJSON = document.getElementById('mapJSON');
+                
+                if (mapEditor.style.display === 'flex') {
+                    mapEditor.style.display = 'none';
+                    if (document.pointerLockElement === null) {
+                        document.body.requestPointerLock();
+                    }
+                } else {
+                    if (document.pointerLockElement === document.body) {
+                        document.exitPointerLock();
+                    }
+                    
+                    // Update the text area with current map data
+                    if (this.map.data) {
+                        mapJSON.value = JSON.stringify(this.map.data, null, 2);
+                    } else {
+                        this.createDefaultMapJSON();
+                    }
+                    
+                    mapEditor.style.display = 'flex';
+                }
+            },
+            
+            createDefaultMapJSON: function() {
+                const defaultMap = {
+                    name: "Default Map",
+                    version: "1.0",
+                    skyColor: "#87CEEB",
+                    fogColor: "#87CEEB",
+                    fogNear: 10,
+                    fogFar: 100,
+                    playerStart: { x: 0, y: 1.8, z: 0 },
+                    ground: {
+                        size: 100,
+                        color: "#8cb369",
+                        roughness: 0.8,
+                        metalness: 0.2
+                    },
+                    objects: [
+                        {
+                            type: "building",
+                            position: { x: 10, y: 0, z: 10 },
+                            size: { width: 5, height: 8, depth: 5 },
+                            color: "#a1a1a1",
+                            roughness: 0.7,
+                            metalness: 0.2
+                        },
+                        {
+                            type: "building",
+                            position: { x: -15, y: 0, z: 8 },
+                            size: { width: 7, height: 5, depth: 7 },
+                            color: "#b19cd9",
+                            roughness: 0.7,
+                            metalness: 0.2
+                        },
+                        {
+                            type: "tree",
+                            position: { x: 5, y: 0, z: -7 },
+                            trunkHeight: 2.5,
+                            trunkRadius: 0.3,
+                            leavesHeight: 2,
+                            leavesRadius: 1.2,
+                            trunkColor: "#8B4513",
+                            leavesColor: "#228B22"
+                        },
+                        {
+                            type: "tree",
+                            position: { x: -5, y: 0, z: -10 },
+                            trunkHeight: 3,
+                            trunkRadius: 0.4,
+                            leavesHeight: 2.5,
+                            leavesRadius: 1.5,
+                            trunkColor: "#8B4513",
+                            leavesColor: "#228B22"
+                        },
+                        {
+                            type: "road",
+                            position: { x: 0, y: 0.01, z: 0 },
+                            size: { width: 5, length: 100 },
+                            rotation: 0,
+                            color: "#333333",
+                            roughness: 0.9,
+                            metalness: 0.1
+                        },
+                        {
+                            type: "road",
+                            position: { x: 0, y: 0.01, z: 0 },
+                            size: { width: 5, length: 100 },
+                            rotation: 90,
+                            color: "#333333",
+                            roughness: 0.9,
+                            metalness: 0.1
+                        }
+                    ]
+                };
+                
+                const mapJSON = document.getElementById('mapJSON');
+                mapJSON.value = JSON.stringify(defaultMap, null, 2);
+                return defaultMap;
+            },
+            
+            onWindowResize: function() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            },
+            
+            onKeyDown: function(event) {
+                if (document.getElementById('mapEditor').style.display === 'flex') {
+                    return;
+                }
+                
+                switch (event.code) {
+                    case 'KeyW':
+                        this.controls.moveForward = true;
+                        break;
+                    case 'KeyA':
+                        this.controls.moveLeft = true;
+                        break;
+                    case 'KeyS':
+                        this.controls.moveBackward = true;
+                        break;
+                    case 'KeyD':
+                        this.controls.moveRight = true;
+                        break;
+                    case 'Space':
+                        if (this.player.flying) {
+                            this.controls.moveUp = true;
+                        } else if (this.player.canJump) {
+                            this.velocity.y = Math.sqrt(2 * this.player.jumpHeight * this.player.gravity);
+                            this.player.canJump = false;
+                        }
+                        break;
+                    case 'ShiftLeft':
+                        if (this.player.flying) {
+                            this.controls.moveDown = true;
+                        }
+                        break;
+                    case 'KeyE':
+                        this.toggleFlyingMode();
+                        break;
+                }
+            },
+            
+            onKeyUp: function(event) {
+                switch (event.code) {
+                    case 'KeyW':
+                        this.controls.moveForward = false;
+                        break;
+                    case 'KeyA':
+                        this.controls.moveLeft = false;
+                        break;
+                    case 'KeyS':
+                        this.controls.moveBackward = false;
+                        break;
+                    case 'KeyD':
+                        this.controls.moveRight = false;
+                        break;
+                    case 'Space':
+                        this.controls.moveUp = false;
+                        break;
+                    case 'ShiftLeft':
+                        this.controls.moveDown = false;
+                        break;
+                }
+            },
+            
+            toggleFlyingMode: function() {
+                this.player.flying = !this.player.flying;
+                document.getElementById('modeDisplay').textContent = this.player.flying ? 'Flying' : 'Walking';
+            },
+            
+            loadDefaultMap: function() {
+                const defaultMap = this.createDefaultMapJSON();
+                this.loadMapFromJSON(defaultMap);
+            },
+            
+            loadMapFromJSON: function(mapData) {
+                // Display loading message
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').textContent = 'Loading map... Please wait.';
+                
+                // Clear existing map objects
+                this.clearMap();
+                
+                // Store map data
+                this.map.data = mapData;
+                
+                // Set scene properties
+                if (mapData.skyColor) {
+                    this.scene.background = new THREE.Color(mapData.skyColor);
+                }
+                
+                if (mapData.fogColor) {
+                    this.scene.fog = new THREE.Fog(
+                        new THREE.Color(mapData.fogColor),
+                        mapData.fogNear || 10,
+                        mapData.fogFar || 100
+                    );
+                }
+                
+                // Set player start position
+                if (mapData.playerStart) {
+                    this.camera.position.set(
+                        mapData.playerStart.x || 0,
+                        mapData.playerStart.y || this.player.height,
+                        mapData.playerStart.z || 0
+                    );
+                }
+                
+                // Create ground
+                if (mapData.ground) {
+                    const groundSize = mapData.ground.size || 100;
+                    const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, 10, 10);
+                    const groundMaterial = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(mapData.ground.color || "#8cb369"),
+                        roughness: mapData.ground.roughness !== undefined ? mapData.ground.roughness : 0.8,
+                        metalness: mapData.ground.metalness !== undefined ? mapData.ground.metalness : 0.2
+                    });
+                    
+                    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                    ground.rotation.x = -Math.PI / 2;
+                    ground.receiveShadow = true;
+                    this.scene.add(ground);
+                    this.map.objects.push(ground);
+                }
+                
+                // Create map objects
+                if (mapData.objects && Array.isArray(mapData.objects)) {
+                    mapData.objects.forEach(objData => {
+                        this.createMapObject(objData);
+                    });
+                }
+                
+                // Hide loading message
+                document.getElementById('loading').style.display = 'none';
+            },
+            
+            clearMap: function() {
+                // Remove all map objects
+                this.map.objects.forEach(obj => {
+                    this.scene.remove(obj);
+                });
+                
+                this.map.objects = [];
+            },
+            
+            createMapObject: function(objData) {
+                if (!objData.type) {
+                    console.warn("Object missing type:", objData);
+                    return;
+                }
+                
+                switch (objData.type.toLowerCase()) {
+                    case 'building':
+                        this.createBuilding(objData);
+                        break;
+                    case 'tree':
+                        this.createTree(objData);
+                        break;
+                    case 'road':
+                        this.createRoad(objData);
+                        break;
+                    case 'box':
+                        this.createBox(objData);
+                        break;
+                    case 'sphere':
+                        this.createSphere(objData);
+                        break;
+                    case 'cylinder':
+                        this.createCylinder(objData);
+                        break;
+                    default:
+                        console.warn("Unknown object type:", objData.type);
+                }
+            },
+            
+            createBuilding: function(objData) {
+                const width = objData.size?.width || 5;
+                const height = objData.size?.height || 8;
+                const depth = objData.size?.depth || 5;
+                
+                const geometry = new THREE.BoxGeometry(width, height, depth);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#a1a1a1"),
+                    roughness: objData.roughness !== undefined ? objData.roughness : 0.7,
+                    metalness: objData.metalness !== undefined ? objData.metalness : 0.2
+                });
+                
+                const building = new THREE.Mesh(geometry, material);
+                building.position.set(
+                    objData.position?.x || 0,
+                    (objData.position?.y || 0) + height / 2,
+                    objData.position?.z || 0
+                );
+                
+                building.castShadow = true;
+                building.receiveShadow = true;
+                
+                this.scene.add(building);
+                this.map.objects.push(building);
+            },
+            
+            createTree: function(objData) {
+                const trunkHeight = objData.trunkHeight || 2.5;
+                const trunkRadius = objData.trunkRadius || 0.3;
+                const leavesHeight = objData.leavesHeight || 2;
+                const leavesRadius = objData.leavesRadius || 1.2;
+                
+                // Tree trunk
+                const trunkGeometry = new THREE.CylinderGeometry(
+                    trunkRadius * 0.7,
+                    trunkRadius,
+                    trunkHeight,
+                    8
+                );
+                const trunkMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.trunkColor || "#8B4513")
+                });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.y = trunkHeight / 2;
+                
+                // Tree leaves
+                const leavesGeometry = new THREE.ConeGeometry(
+                    leavesRadius,
+                    leavesHeight,
+                    8
+                );
+                const leavesMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.leavesColor || "#228B22")
+                });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.y = trunkHeight + leavesHeight / 2;
+                
+                // Combine trunk and leaves into a tree group
+                const tree = new THREE.Group();
+                tree.add(trunk);
+                tree.add(leaves);
+                
+                tree.position.set(
+                    objData.position?.x || 0,
+                    objData.position?.y || 0,
+                    objData.position?.z || 0
+                );
+                
+                tree.castShadow = true;
+                tree.receiveShadow = true;
+                
+                this.scene.add(tree);
+                this.map.objects.push(tree);
+            },
+            
+            createRoad: function(objData) {
+                const width = objData.size?.width || 5;
+                const length = objData.size?.length || 100;
+                const rotation = objData.rotation !== undefined ? (objData.rotation * Math.PI / 180) : 0;
+                
+                const roadGeometry = new THREE.PlaneGeometry(width, length);
+                const roadMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#333333"),
+                    roughness: objData.roughness !== undefined ? objData.roughness : 0.9,
+                    metalness: objData.metalness !== undefined ? objData.metalness : 0.1
+                });
+                
+                const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                road.rotation.x = -Math.PI / 2;
+                road.rotation.z = rotation;
+                
+                road.position.set(
+                    objData.position?.x || 0,
+                    objData.position?.y || 0.01,  // Slightly above ground to prevent z-fighting
+                    objData.position?.z || 0
+                );
+                
+                road.receiveShadow = true;
+                
+                this.scene.add(road);
+                this.map.objects.push(road);
+            },
+            
+            createBox: function(objData) {
+                const width = objData.size?.width || 1;
+                const height = objData.size?.height || 1;
+                const depth = objData.size?.depth || 1;
+                
+                const geometry = new THREE.BoxGeometry(width, height, depth);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#ffffff"),
+                    roughness: objData.roughness !== undefined ? objData.roughness : 0.5,
+                    metalness: objData.metalness !== undefined ? objData.metalness : 0.5
+                });
+                
+                const box = new THREE.Mesh(geometry, material);
+                box.position.set(
+                    objData.position?.x || 0,
+                    (objData.position?.y || 0) + height / 2,
+                    objData.position?.z || 0
+                );
+                
+                if (objData.rotation) {
+                    box.rotation.set(
+                        (objData.rotation?.x || 0) * Math.PI / 180,
+                        (objData.rotation?.y || 0) * Math.PI / 180,
+                        (objData.rotation?.z || 0) * Math.PI / 180
+                    );
+                }
+                
+                box.castShadow = true;
+                box.receiveShadow = true;
+                
+                this.scene.add(box);
+                this.map.objects.push(box);
+            },
+            
+            createSphere: function(objData) {
+                const radius = objData.radius || 1;
+                
+                const geometry = new THREE.SphereGeometry(radius, 32, 16);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#ffffff"),
+                    roughness: objData.roughness !== undefined ? objData.roughness : 0.5,
+                    metalness: objData.metalness !== undefined ? objData.metalness : 0.5
+                });
+                
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.position.set(
+                    objData.position?.x || 0,
+                    objData.position?.y || radius,
+                    objData.position?.z || 0
+                );
+                
+                sphere.castShadow = true;
+                sphere.receiveShadow = true;
+                
+                this.scene.add(sphere);
+                this.map.objects.push(sphere);
+            },
+            
+            createCylinder: function(objData) {
+                const radiusTop = objData.radiusTop || 1;
+                const radiusBottom = objData.radiusBottom !== undefined ? objData.radiusBottom : radiusTop;
+                const height = objData.height || 2;
+                
+                const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#ffffff"),
+                    roughness: objData.roughness !== undefined ? objData.roughness : 0.5,
+                    metalness: objData.metalness !== undefined ? objData.metalness : 0.5
+                });
+                
+                const cylinder = new THREE.Mesh(geometry, material);
+                cylinder.position.set(
+                    objData.position?.x || 0,
+                    (objData.position?.y || 0) + height / 2,
+                    objData.position?.z || 0
+                );
+                
+                if (objData.rotation) {
+                    cylinder.rotation.set(
+                        (objData.rotation?.x || 0) * Math.PI / 180,
+                        (objData.rotation?.y || 0) * Math.PI / 180,
+                        (objData.rotation?.z || 0) * Math.PI / 180
+                    );
+                }
+                
+                cylinder.castShadow = true;
+                cylinder.receiveShadow = true;
+                
+                this.scene.add(cylinder);
+                this.map.objects.push(cylinder);
+            },
+            
+            animate: function() {
+                requestAnimationFrame(this.animate.bind(this));
+                
+                const delta = this.clock.getDelta();
+                this.update(delta);
+                
+                this.renderer.render(this.scene, this.camera);
+            },
+            
+            update: function(delta) {
+                // Skip physics updates if map editor is open
+                if (document.getElementById('mapEditor').style.display === 'flex') {
+                    return;
+                }
+                
+                // Apply gravity unless flying
+                if (!this.player.flying) {
+                    this.velocity.y -= this.player.gravity * delta;
+                } else {
+                    // In flying mode, no gravity
+                    this.velocity.y = 0;
+                }
+                
+                // Movement logic
+                this.direction.z = Number(this.controls.moveForward) - Number(this.controls.moveBackward);
+                this.direction.x = Number(this.controls.moveRight) - Number(this.controls.moveLeft);
+                this.direction.normalize();
+                
+                // Calculate velocity based on direction and camera orientation
+                if (this.controls.moveForward || this.controls.moveBackward) {
+                    this.velocity.z = -this.direction.z * this.player.speed;
+                } else {
+                    this.velocity.z = 0;
+                }
+                
+                if (this.controls.moveLeft || this.controls.moveRight) {
+                    this.velocity.x = -this.direction.x * this.player.speed;
+                } else {
+                    this.velocity.x = 0;
+                }
+                
+                // Handle vertical movement in flying mode
+                if (this.player.flying) {
+                    if (this.controls.moveUp) {
+                        this.velocity.y = this.player.speed;
+                    } else if (this.controls.moveDown) {
+                        this.velocity.y = -this.player.speed;
+                    } else {
+                        this.velocity.y = 0;
+                    }
+                }
+                
+                // Convert velocity from local to world coordinates based on camera direction
+                const cameraDirection = new THREE.Vector3();
+                this.camera.getWorldDirection(cameraDirection);
+                
+                const moveX = this.velocity.x;
+                const moveZ = this.velocity.z;
+                
+                const angle = Math.atan2(cameraDirection.x, cameraDirection.z);
+                
+                const finalVelocityX = moveZ * Math.sin(angle) + moveX * Math.cos(angle);
+                const finalVelocityZ = moveZ * Math.cos(angle) - moveX * Math.sin(angle);
+                
+                // Apply movement
+                this.camera.position.x += finalVelocityX * delta;
+                this.camera.position.z += finalVelocityZ * delta;
+                this.camera.position.y += this.velocity.y * delta;
+                
+                // Collision detection with ground
+                if (!this.player.flying) {
+                    if (this.camera.position.y < this.player.height) {
+                        this.camera.position.y = this.player.height;
+                        this.velocity.y = 0;
+                        this.player.canJump = true;
+                    }
+                }
+                
+                // Prevent going outside the map
+                const mapSize = this.map.data?.ground?.size / 2 || 50;
+                this.camera.position.x = Math.max(-mapSize, Math.min(mapSize, this.camera.position.x));
+                this.camera.position.z = Math.max(-mapSize, Math.min(mapSize, this.camera.position.z));
+                
+                // Limit flying height
+                if (this.player.flying) {
+                    const maxHeight = 50;
+                    this.camera.position.y = Math.max(this.player.height, Math.min(maxHeight, this.camera.position.y));
+                }
+            }
+        };
+        
+        // Initialize the application
+        window.onload = function() {
+            app.init();
+        };
+    </script>
+</body>
+</html>

@@ -3,21 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js Map Creator</title>
+    <title>Enhanced Three.js Map Creator</title>
     <style>
         body { 
             margin: 0; 
             overflow: hidden;
             font-family: Arial, sans-serif;
-        }
-        #container {
-            position: relative;
-            width: 100%;
-            height: 100vh;
-        }
-        #canvas {
-            width: 100%;
-            height: 100%;
         }
         #ui {
             position: absolute;
@@ -27,35 +18,28 @@
             color: white;
             padding: 10px;
             border-radius: 5px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
             user-select: none;
+            max-width: 280px;
         }
         .toolbar {
             display: flex;
             flex-wrap: wrap;
             gap: 5px;
+            margin-bottom: 10px;
         }
         button {
             padding: 8px 12px;
-            background: #2a2a2a;
+            background: #333;
             color: white;
-            border: 1px solid #555;
-            border-radius: 3px;
+            border: none;
             cursor: pointer;
+            border-radius: 3px;
         }
         button.active {
             background: #4a8fe7;
         }
-        button:hover {
-            background: #3a3a3a;
-        }
-        #controls {
-            font-size: 12px;
-            margin-top: 10px;
-        }
         .color-picker {
+            margin: 10px 0;
             display: flex;
             align-items: center;
             gap: 5px;
@@ -63,45 +47,109 @@
         input[type="color"] {
             width: 30px;
             height: 30px;
-            border: none;
-            padding: 0;
-            background: none;
+        }
+        .texture-selector {
+            margin: 10px 0;
+        }
+        .texture-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .texture-option {
+            width: 40px;
+            height: 40px;
+            background-size: cover;
+            border: 2px solid #555;
+            cursor: pointer;
+        }
+        .texture-option.active {
+            border: 2px solid #4a8fe7;
+        }
+        #controls {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        #save-load {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        /* Style for complete building thumbnail */
+        .texture-option[data-texture="complete"] {
+            background: linear-gradient(135deg, #e8e0d8 0%, #e8e0d8 50%, #4a85b3 50%, #4a85b3 100%);
+            position: relative;
+        }
+        .texture-option[data-texture="complete"]::after {
+            content: "";
+            position: absolute;
+            top: 15%;
+            left: 25%;
+            width: 50%;
+            height: 25%;
+            background-color: #5d4037;
+            border-radius: 2px;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="canvas"></div>
-        <div id="ui">
-            <h3 style="margin: 0 0 10px 0;">Map Creator</h3>
-            <div class="toolbar">
-                <button id="terrainBtn">Terrain</button>
-                <button id="buildingBtn">Building</button>
-                <button id="roadBtn">Road</button>
-                <button id="treeBtn">Tree</button>
-                <button id="bushBtn">Bush</button>
-                <button id="carBtn">Car</button>
-                <button id="deleteBtn">Delete</button>
+    <div id="ui">
+        <h3>Enhanced Map Creator</h3>
+        <div class="toolbar">
+            <button id="terrainBtn">Terrain</button>
+            <button id="buildingBtn">Building</button>
+            <button id="roadBtn">Road</button>
+            <button id="treeBtn">Tree</button>
+            <button id="bushBtn">Bush</button>
+            <button id="carBtn">Car</button>
+            <button id="deleteBtn">Delete</button>
+        </div>
+        
+        <div class="color-picker">
+            <label>Color:</label>
+            <input type="color" id="colorPicker" value="#4a8fe7">
+        </div>
+        
+        <div class="texture-selector" id="buildingTextureSelector" style="display:none;">
+            <label>Building Texture:</label>
+            <div class="texture-options" id="buildingTextures">
+                <div class="texture-option active" data-texture="none" style="background-color: #808080;"></div>
+                <div class="texture-option" data-texture="brick" style="background-color: #b32d00;"></div>
+                <div class="texture-option" data-texture="concrete" style="background-color: #cccccc;"></div>
+                <div class="texture-option" data-texture="wood" style="background-color: #8B4513;"></div>
+                <div class="texture-option" data-texture="complete" title="Complete Building"></div>
+                <div class="texture-option" data-texture="residential" title="Residential Building" style="background-color: #e0d5c0;"></div>
             </div>
-            <div class="color-picker">
-                <label>Color:</label>
-                <input type="color" id="colorPicker" value="#4a8fe7">
+        </div>
+        
+        <div class="texture-selector" id="roadTextureSelector" style="display:none;">
+            <label>Road Texture:</label>
+            <div class="texture-options" id="roadTextures">
+                <div class="texture-option active" data-texture="none" style="background-color: #333333;"></div>
+                <div class="texture-option" data-texture="asphalt" style="background-color: #222222;"></div>
+                <div class="texture-option" data-texture="cobblestone" style="background-color: #777777;"></div>
             </div>
-            <div id="controls">
-                <p>Left click: Place object</p>
-                <p>Right click: Rotate object</p>
-                <p>WASD: Move camera</p>
-                <p>Mouse drag: Look around</p>
-                <p>Scroll: Zoom in/out</p>
-            </div>
+        </div>
+        
+        <div id="controls">
+            <p>Left click: Place object</p>
+            <p>Right click: Rotate object</p>
+            <p>Mouse drag: Look around</p>
+            <p>Scroll: Zoom in/out</p>
+        </div>
+        
+        <div id="save-load">
+            <button id="saveBtn">Save Map</button>
+            <button id="loadBtn">Load Map</button>
         </div>
     </div>
 
     <script type="importmap">
         {
             "imports": {
-                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+                "three": "https://unpkg.com/three@0.150.1/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.150.1/examples/jsm/"
             }
         }
     </script>
@@ -111,96 +159,510 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         
-        // Main application class
-        class MapCreator {
+        // Main class
+        class EnhancedMapCreator {
             constructor() {
-                this.canvas = document.getElementById('canvas');
-                
-                // Set up Three.js scene
+                // Setup scene
                 this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+                this.scene.background = new THREE.Color(0x87ceeb);
+                // Remove fog temporarily to troubleshoot rendering issues
+                // this.scene.fog = new THREE.Fog(0x87ceeb, 50, 100);
                 
-                // Set up camera
-                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.camera.position.set(10, 10, 10);
+                // Setup camera with simpler settings
+                this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(15, 15, 15);
                 this.camera.lookAt(0, 0, 0);
                 
-                // Set up renderer
-                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                // Setup renderer with basic settings to ensure compatibility
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    alpha: true // Allow transparency
+                });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
                 this.renderer.shadowMap.enabled = true;
-                this.canvas.appendChild(this.renderer.domElement);
+                // Remove potentially problematic settings
+                // this.renderer.outputEncoding = THREE.sRGBEncoding;
+                // this.renderer.toneMappingExposure = 1.2;
+                document.body.appendChild(this.renderer.domElement);
                 
-                // Set up controls
+                                // Setup controls with basic settings
                 this.controls = new OrbitControls(this.camera, this.renderer.domElement);
                 this.controls.enableDamping = true;
-                this.controls.dampingFactor = 0.05;
                 
-                // Set up raycaster for object placement
+                // Setup raycaster for object placement
                 this.raycaster = new THREE.Raycaster();
                 this.mouse = new THREE.Vector2();
                 
-                // Set up lighting
-                this.setupLights();
+                // Setup lighting
+                this.addLights();
                 
-                // Create ground plane
+                // Create ground
                 this.createGround();
                 
-                // Object collections
+                // Collection for placed objects
                 this.objects = [];
                 
-                // Current tool state
-                this.currentTool = 'terrain';
+                // Current tool
+                this.currentTool = 'building';
                 this.color = '#4a8fe7';
+                this.currentBuildingTexture = 'none';
+                this.currentRoadTexture = 'none';
                 
-                // Event listeners
-                window.addEventListener('resize', this.onWindowResize.bind(this));
+                // Initialize texture loader
+                this.textureLoader = new THREE.TextureLoader();
+                this.loadTextures();
+                
+                // Add event listeners
+                window.addEventListener('resize', this.onResize.bind(this));
                 this.renderer.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
                 this.renderer.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
                 
-                // UI setup
+                // Add UI listeners
                 this.setupUI();
                 
-                // Start animation loop
+                // Start rendering
                 this.animate();
             }
             
-            setupLights() {
-                // Ambient light
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-                this.scene.add(ambientLight);
+            loadTextures() {
+                // Create local textures using procedural methods instead of loading from URLs
+                this.textures = {
+                    building: {
+                        brick: this.createBrickTexture(),
+                        concrete: this.createConcreteTexture(),
+                        wood: this.createWoodTexture(),
+                        complete: this.createCompleteBuildingTexture(),
+                        residential: this.createResidentialBuildingTexture() // Create procedural residential texture
+                    },
+                    road: {
+                        asphalt: this.createAsphaltTexture(),
+                        cobblestone: this.createCobblestoneTexture()
+                    }
+                };
                 
-                // Directional light (sun)
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-                directionalLight.position.set(5, 10, 7.5);
-                directionalLight.castShadow = true;
-                directionalLight.shadow.mapSize.width = 2048;
-                directionalLight.shadow.mapSize.height = 2048;
-                directionalLight.shadow.camera.near = 0.5;
-                directionalLight.shadow.camera.far = 50;
-                directionalLight.shadow.camera.left = -20;
-                directionalLight.shadow.camera.right = 20;
-                directionalLight.shadow.camera.top = 20;
-                directionalLight.shadow.camera.bottom = -20;
-                this.scene.add(directionalLight);
+                // Set texture parameters
+                Object.values(this.textures.building).forEach(texture => {
+                    if (texture) {
+                        texture.wrapS = THREE.RepeatWrapping;
+                        texture.wrapT = THREE.RepeatWrapping;
+                    }
+                });
+                
+                Object.values(this.textures.road).forEach(texture => {
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                });
             }
             
-            createGround() {
-                // Create ground geometry (large flat plane)
-                const groundGeometry = new THREE.PlaneGeometry(100, 100);
-                const groundMaterial = new THREE.MeshStandardMaterial({ 
+            // Create a procedural residential building texture with windows, brick pattern, etc.
+            createResidentialBuildingTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                // Base wall color (beige/tan for residential building)
+                ctx.fillStyle = '#e0d5c0';
+                ctx.fillRect(0, 0, 512, 512);
+                
+                // Create brick pattern for the lower part (first floor)
+                ctx.fillStyle = '#b8997a';
+                
+                // Lower part brick pattern
+                for (let y = 312; y < 512; y += 20) {
+                    for (let x = 0; x < 512; x += 40) {
+                        // Offset every other row for realistic brickwork
+                        const offset = (Math.floor(y / 20) % 2) * 20;
+                        ctx.fillRect(x + offset, y, 36, 16);
+                        
+                        // Add some texture/variation to bricks
+                        ctx.fillStyle = `rgba(${150 + Math.random() * 30}, ${120 + Math.random() * 30}, ${90 + Math.random() * 30}, 0.7)`;
+                    }
+                }
+                
+                // Add horizontal trim between floors
+                ctx.fillStyle = '#9c8a76';
+                ctx.fillRect(0, 310, 512, 8);
+                ctx.fillRect(0, 150, 512, 8);
+                
+                // Window rows
+                const createWindows = (baseY, numWindows, windowHeight) => {
+                    ctx.fillStyle = '#9c8a76'; // Window frames
+                    
+                    const windowWidth = 70;
+                    const spacing = (512 - (numWindows * windowWidth)) / (numWindows + 1);
+                    
+                    for (let i = 0; i < numWindows; i++) {
+                        const windowX = spacing + i * (windowWidth + spacing);
+                        
+                        // Window frame
+                        ctx.fillRect(windowX - 5, baseY - 5, windowWidth + 10, windowHeight + 10);
+                        
+                        // Glass - slightly bluish
+                        ctx.fillStyle = '#a4c4d9';
+                        ctx.fillRect(windowX, baseY, windowWidth, windowHeight);
+                        
+                        // Window details - horizontal and vertical dividers
+                        ctx.fillStyle = '#9c8a76';
+                        ctx.fillRect(windowX, baseY + windowHeight / 2, windowWidth, 3);
+                        ctx.fillRect(windowX + windowWidth / 2, baseY, 3, windowHeight);
+                        
+                        // Reset for next window frame
+                        ctx.fillStyle = '#9c8a76';
+                    }
+                };
+                
+                // Add windows on two floors
+                createWindows(180, 4, 80); // Second floor windows
+                createWindows(20, 4, 80);  // Third floor windows
+                
+                // Add a door on the first floor
+                ctx.fillStyle = '#7d5d4f'; // Door frame color
+                ctx.fillRect(216, 360, 80, 140); // Door frame
+                
+                // Door panel
+                ctx.fillStyle = '#5d433a';
+                ctx.fillRect(226, 370, 60, 130);
+                
+                // Door handle
+                ctx.fillStyle = '#d4af37';
+                ctx.beginPath();
+                ctx.arc(270, 430, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Add some architectural details
+                
+                // Top trim
+                ctx.fillStyle = '#9c8a76';
+                ctx.fillRect(0, 0, 512, 12);
+                
+                // Add some subtle texture noise to the entire facade
+                for (let i = 0; i < 5000; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    ctx.fillStyle = `rgba(0, 0, 0, ${Math.random() * 0.03})`;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+                
+                // Return the canvas as a texture
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            }
+            
+            // Create procedural brick texture
+            createBrickTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                
+                // Background color
+                ctx.fillStyle = '#b32d00';
+                ctx.fillRect(0, 0, 256, 256);
+                
+                // Brick pattern
+                ctx.fillStyle = '#6e1900';
+                
+                // Draw horizontal mortar lines
+                for (let y = 0; y < 256; y += 32) {
+                    ctx.fillRect(0, y, 256, 4);
+                }
+                
+                // Draw vertical mortar lines (offset for every other row)
+                for (let y = 0; y < 256; y += 64) {
+                    for (let x = 0; x < 256; x += 64) {
+                        ctx.fillRect(x, y, 4, 32);
+                        ctx.fillRect(x + 32, y + 32, 4, 32);
+                    }
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            }
+            
+            // Create procedural concrete texture
+            createConcreteTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                
+                // Base color
+                ctx.fillStyle = '#cccccc';
+                ctx.fillRect(0, 0, 256, 256);
+                
+                // Add noise
+                for (let i = 0; i < 10000; i++) {
+                    const x = Math.random() * 256;
+                    const y = Math.random() * 256;
+                    const gray = 180 + Math.random() * 40;
+                    ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+                    ctx.fillRect(x, y, 2, 2);
+                }
+                
+                // Add cracks
+                ctx.strokeStyle = '#999999';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 5; i++) {
+                    ctx.beginPath();
+                    const startX = Math.random() * 256;
+                    const startY = Math.random() * 256;
+                    ctx.moveTo(startX, startY);
+                    
+                    let x = startX;
+                    let y = startY;
+                    
+                    for (let j = 0; j < 5; j++) {
+                        x += (Math.random() - 0.5) * 40;
+                        y += (Math.random() - 0.5) * 40;
+                        ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            }
+            
+            // Create procedural wood texture
+            createWoodTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                
+                // Base wood color
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(0, 0, 256, 256);
+                
+                // Create wood grain
+                for (let i = 0; i < 30; i++) {
+                    const grayValue = 100 + Math.floor(Math.random() * 50);
+                    ctx.strokeStyle = `rgb(${grayValue}, ${Math.floor(grayValue/2)}, 19)`;
+                    ctx.lineWidth = 1 + Math.random() * 2;
+                    
+                    const y = i * 10 + Math.random() * 5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    
+                    // Create wavy lines for wood grain
+                    for (let x = 0; x < 256; x += 10) {
+                        const yOffset = Math.sin(x * 0.05) * 5;
+                        ctx.lineTo(x, y + yOffset);
+                    }
+                    
+                    ctx.stroke();
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            }
+            
+            // Create a complete building texture with windows, doors, etc.
+            createCompleteBuildingTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                // Building base color (facade)
+                ctx.fillStyle = '#e8e0d8'; // Light beige
+                ctx.fillRect(0, 0, 512, 512);
+                
+                // Draw floors and structure lines
+                const numFloors = 4;
+                const floorHeight = 512 / numFloors;
+                
+                // Horizontal lines between floors
+                ctx.fillStyle = '#aaa6a0';
+                for (let i = 1; i < numFloors; i++) {
+                    const y = i * floorHeight;
+                    ctx.fillRect(0, y - 4, 512, 8);
+                }
+                
+                // Draw windows
+                ctx.fillStyle = '#4a85b3'; // Window glass color
+                
+                // Different window patterns for each floor
+                for (let floor = 0; floor < numFloors; floor++) {
+                    const baseY = floor * floorHeight + 20;
+                    
+                    if (floor === 0) {
+                        // Ground floor with door
+                        
+                        // Door
+                        ctx.fillStyle = '#5d4037'; // Brown door
+                        ctx.fillRect(220, baseY, 72, 120);
+                        
+                        // Door details
+                        ctx.fillStyle = '#8d6e63'; // Lighter brown for details
+                        ctx.fillRect(230, baseY + 20, 52, 80);
+                        
+                        // Door handle
+                        ctx.fillStyle = '#ffeb3b'; // Gold/brass color
+                        ctx.beginPath();
+                        ctx.arc(280, baseY + 60, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Windows on each side of the door
+                        ctx.fillStyle = '#4a85b3'; // Back to window color
+                        ctx.fillRect(50, baseY, 100, 80);  // Left window
+                        ctx.fillRect(362, baseY, 100, 80); // Right window
+                    } else {
+                        // Upper floors with row of windows
+                        const numWindows = 4;
+                        const windowWidth = 80;
+                        const spacing = (512 - (numWindows * windowWidth)) / (numWindows + 1);
+                        
+                        for (let w = 0; w < numWindows; w++) {
+                            const windowX = spacing + w * (windowWidth + spacing);
+                            ctx.fillRect(windowX, baseY, windowWidth, 80);
+                            
+                            // Window frame
+                            ctx.strokeStyle = '#ffffff';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(windowX, baseY, windowWidth, 80);
+                            
+                            // Window panes
+                            ctx.beginPath();
+                            ctx.moveTo(windowX + windowWidth/2, baseY);
+                            ctx.lineTo(windowX + windowWidth/2, baseY + 80);
+                            ctx.stroke();
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(windowX, baseY + 40);
+                            ctx.lineTo(windowX + windowWidth, baseY + 40);
+                            ctx.stroke();
+                        }
+                    }
+                }
+                
+                // Add some texture/noise to the facade
+                for (let i = 0; i < 5000; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const alpha = Math.random() * 0.05; // Very subtle
+                    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+                
+                // Add roof details at the top
+                ctx.fillStyle = '#8d6e63'; // Brown for roof trim
+                ctx.fillRect(0, 0, 512, 16);
+                
+                // Small decorative elements on the roof trim
+                ctx.fillStyle = '#5d4037';
+                for (let x = 20; x < 512; x += 40) {
+                    ctx.fillRect(x, 0, 20, 8);
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            }
+            
+            // Create procedural asphalt texture
+            createAsphaltTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                
+                // Base dark color
+                ctx.fillStyle = '#333333';
+                ctx.fillRect(0, 0, 256, 256);
+                
+                // Add noise and small rocks
+                for (let i = 0; i < 5000; i++) {
+                    const x = Math.random() * 256;
+                    const y = Math.random() * 256;
+                    const size = Math.random() * 2;
+                    const gray = 50 + Math.random() * 30;
+                    ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+                    ctx.fillRect(x, y, size, size);
+                }
+                
+                // Add road lines
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(128, 0, 8, 64);
+                ctx.fillRect(128, 96, 8, 64);
+                ctx.fillRect(128, 192, 8, 64);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            }
+            
+            // Create procedural cobblestone texture
+            createCobblestoneTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                
+                // Background (mortar)
+                ctx.fillStyle = '#777777';
+                ctx.fillRect(0, 0, 256, 256);
+                
+                // Draw cobblestones
+                for (let y = 0; y < 256; y += 32) {
+                    for (let x = (y % 64 === 0) ? 0 : 16; x < 256; x += 32) {
+                        // Vary the stone colors slightly
+                        const gray = 120 + Math.floor(Math.random() * 40);
+                        ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+                        
+                        // Draw a rounded stone
+                        ctx.beginPath();
+                        ctx.ellipse(x + 16, y + 16, 14, 14, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            }
+            
+                        addLights() {
+                // Add ambient light with higher intensity
+                const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+                this.scene.add(ambient);
+                
+                // Simple directional light setup
+                const sunlight = new THREE.DirectionalLight(0xffffff, 1);
+                sunlight.position.set(10, 10, 10);
+                sunlight.castShadow = true;
+                
+                // Basic shadow settings
+                sunlight.shadow.mapSize.width = 1024;
+                sunlight.shadow.mapSize.height = 1024;
+                sunlight.shadow.camera.near = 0.5;
+                sunlight.shadow.camera.far = 50;
+                sunlight.shadow.camera.left = -25;
+                sunlight.shadow.camera.right = 25;
+                sunlight.shadow.camera.top = 25;
+                sunlight.shadow.camera.bottom = -25;
+                
+                this.scene.add(sunlight);
+                
+                // Add a helper to visualize the light position (helpful for debugging)
+                const helper = new THREE.DirectionalLightHelper(sunlight, 5);
+                this.scene.add(helper);
+            }
+            
+                        createGround() {
+                // Create a simple ground plane
+                const geometry = new THREE.PlaneGeometry(100, 100);
+                const material = new THREE.MeshStandardMaterial({ 
                     color: 0x7cba74, 
-                    roughness: 0.8,
+                    roughness: 0.8 
                 });
-                this.ground = new THREE.Mesh(groundGeometry, groundMaterial);
-                this.ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+                this.ground = new THREE.Mesh(geometry, material);
+                this.ground.rotation.x = -Math.PI / 2; // Make it horizontal
                 this.ground.receiveShadow = true;
                 this.scene.add(this.ground);
                 
-                // Create grid helper
-                const gridHelper = new THREE.GridHelper(100, 100, 0x000000, 0x888888);
-                gridHelper.position.y = 0.01; // Slight offset to prevent z-fighting
-                this.scene.add(gridHelper);
+                // Add grid helper
+                const grid = new THREE.GridHelper(100, 100);
+                grid.position.y = 0.01; // Slightly above ground to prevent z-fighting
+                this.scene.add(grid);
             }
             
             setupUI() {
@@ -218,21 +680,55 @@
                     this.color = e.target.value;
                 });
                 
-                // Mark the default tool as active
-                document.getElementById('terrainBtn').classList.add('active');
+                // Building textures
+                document.querySelectorAll('#buildingTextures .texture-option').forEach(option => {
+                    option.addEventListener('click', (e) => {
+                        document.querySelectorAll('#buildingTextures .texture-option').forEach(el => {
+                            el.classList.remove('active');
+                        });
+                        e.target.classList.add('active');
+                        this.currentBuildingTexture = e.target.dataset.texture;
+                    });
+                });
+                
+                // Road textures
+                document.querySelectorAll('#roadTextures .texture-option').forEach(option => {
+                    option.addEventListener('click', (e) => {
+                        document.querySelectorAll('#roadTextures .texture-option').forEach(el => {
+                            el.classList.remove('active');
+                        });
+                        e.target.classList.add('active');
+                        this.currentRoadTexture = e.target.dataset.texture;
+                    });
+                });
+                
+                // Save and load
+                document.getElementById('saveBtn').addEventListener('click', this.saveMap.bind(this));
+                document.getElementById('loadBtn').addEventListener('click', this.loadMap.bind(this));
+                
+                // Set the initial active button
+                document.getElementById('buildingBtn').classList.add('active');
             }
             
             setTool(tool) {
                 this.currentTool = tool;
                 
-                // Update UI to show active tool
-                document.querySelectorAll('#ui button').forEach(btn => {
+                // Update UI
+                document.querySelectorAll('.toolbar button').forEach(btn => {
                     btn.classList.remove('active');
                 });
                 document.getElementById(`${tool}Btn`).classList.add('active');
+                
+                // Show/hide appropriate texture selectors
+                document.getElementById('buildingTextureSelector').style.display = 
+                    (tool === 'building') ? 'block' : 'none';
+                    
+                document.getElementById('roadTextureSelector').style.display = 
+                    (tool === 'road') ? 'block' : 'none';
             }
             
-            onWindowResize() {
+            onResize() {
+                // Update camera and renderer on window resize
                 this.camera.aspect = window.innerWidth / window.innerHeight;
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -245,11 +741,11 @@
             }
             
             onMouseDown(event) {
-                // Handle left click (place object)
+                // Left click (place object)
                 if (event.button === 0) {
                     this.placeObject();
                 }
-                // Handle right click (rotate object)
+                // Right click (rotate object)
                 else if (event.button === 2) {
                     event.preventDefault();
                     this.rotateObject();
@@ -257,16 +753,16 @@
             }
             
             placeObject() {
-                // Cast a ray from the camera through the mouse position
+                // Cast a ray from camera through mouse position
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 
                 // Check for intersections with the ground or existing objects
-                const intersects = this.raycaster.intersectObjects([this.ground, ...this.objects], false);
+                const intersects = this.raycaster.intersectObjects([this.ground, ...this.objects]);
                 
                 if (intersects.length > 0) {
                     const intersect = intersects[0];
                     
-                    // If delete tool is active, remove the clicked object
+                    // Handle delete tool
                     if (this.currentTool === 'delete') {
                         if (intersect.object !== this.ground) {
                             this.scene.remove(intersect.object);
@@ -275,10 +771,10 @@
                         return;
                     }
                     
-                    // Create object based on the current tool
+                    // Create new object based on selected tool
                     let object;
                     
-                    switch (this.currentTool) {
+                    switch(this.currentTool) {
                         case 'terrain':
                             object = this.createTerrain(intersect.point);
                             break;
@@ -300,6 +796,21 @@
                     }
                     
                     if (object) {
+                        // Store metadata for saving/loading
+                        object.userData = {
+                            type: this.currentTool,
+                            color: this.color,
+                            position: { x: object.position.x, y: object.position.y, z: object.position.z },
+                            rotation: { x: object.rotation.x, y: object.rotation.y, z: object.rotation.z }
+                        };
+                        
+                        if (this.currentTool === 'building') {
+                            object.userData.texture = this.currentBuildingTexture;
+                        }
+                        if (this.currentTool === 'road') {
+                            object.userData.texture = this.currentRoadTexture;
+                        }
+                        
                         this.scene.add(object);
                         this.objects.push(object);
                     }
@@ -307,15 +818,24 @@
             }
             
             rotateObject() {
-                // Cast a ray to find object to rotate
+                // Cast a ray to find an object to rotate
                 this.raycaster.setFromCamera(this.mouse, this.camera);
-                const intersects = this.raycaster.intersectObjects(this.objects, false);
+                const intersects = this.raycaster.intersectObjects(this.objects);
                 
                 if (intersects.length > 0) {
                     const object = intersects[0].object;
                     
                     // Rotate 90 degrees around Y axis
                     object.rotation.y += Math.PI / 2;
+                    
+                    // Update userData rotation
+                    if (object.userData) {
+                        object.userData.rotation = {
+                            x: object.rotation.x,
+                            y: object.rotation.y,
+                            z: object.rotation.z
+                        };
+                    }
                 }
             }
             
@@ -323,11 +843,11 @@
                 const size = 5;
                 const height = 1 + Math.random() * 2;
                 
-                // Create a simple hill/terrain feature
+                // Create a simple hill
                 const geometry = new THREE.ConeGeometry(size, height, 4);
                 const material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(this.color),
-                    roughness: 0.8,
+                    roughness: 0.8
                 });
                 
                 const terrain = new THREE.Mesh(geometry, material);
@@ -341,15 +861,82 @@
             
             createBuilding(position) {
                 const width = 2 + Math.random() * 2;
+                const height = 3 + Math.random() * 20;
                 const depth = 2 + Math.random() * 2;
-                const height = 3 + Math.random() * 5;
                 
-                // Create building
                 const geometry = new THREE.BoxGeometry(width, height, depth);
-                const material = new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(this.color),
-                    roughness: 0.7,
-                });
+                
+                let material;
+                
+                if (this.currentBuildingTexture === 'none') {
+                    material = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(this.color),
+                        roughness: 0.7
+                    });
+                } else if (this.currentBuildingTexture === 'complete') {
+                    // For complete building texture, use standard dimensions
+                    const texture = this.textures.building.complete;
+                    texture.repeat.set(1, 1);
+                    
+                    // Override dimensions to match texture aspect ratio
+                    const standardHeight = 8;
+                    const standardWidth = 4;
+                    const standardDepth = 4;
+                    
+                    // Create a new geometry with standard dimensions for complete buildings
+                    geometry.dispose(); // Clean up the old geometry
+                    const newGeometry = new THREE.BoxGeometry(standardWidth, standardHeight, standardDepth);
+                    
+                    material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        color: 0xffffff, // Use white to preserve texture colors
+                        roughness: 0.7
+                    });
+                    
+                    const building = new THREE.Mesh(newGeometry, material);
+                    building.position.copy(position);
+                    building.position.y = standardHeight / 2;
+                    building.castShadow = true;
+                    building.receiveShadow = true;
+                    
+                    return building;
+                } else if (this.currentBuildingTexture === 'residential') {
+                    // For residential building, use a standard shape for apartment buildings
+                    const standardHeight = 12;
+                    const standardWidth = 8;
+                    const standardDepth = 8;
+                    
+                    // Create a new geometry for residential building
+                    geometry.dispose();
+                    const newGeometry = new THREE.BoxGeometry(standardWidth, standardHeight, standardDepth);
+                    
+                    const texture = this.textures.building.residential;
+                    texture.repeat.set(1, 1);
+                    
+                    material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        color: 0xffffff, // Use white to preserve texture colors
+                        roughness: 0.75,
+                        metalness: 0.1
+                    });
+                    
+                    const building = new THREE.Mesh(newGeometry, material);
+                    building.position.copy(position);
+                    building.position.y = standardHeight / 2;
+                    building.castShadow = true;
+                    building.receiveShadow = true;
+                    
+                    return building;
+                } else {
+                    const texture = this.textures.building[this.currentBuildingTexture];
+                    texture.repeat.set(width / 2, height / 2);
+                    
+                    material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        color: new THREE.Color(this.color),
+                        roughness: 0.7
+                    });
+                }
                 
                 const building = new THREE.Mesh(geometry, material);
                 building.position.copy(position);
@@ -361,71 +948,87 @@
             }
             
             createRoad(position) {
-                const width = 5;
-                const depth = 1;
-                const height = 0.1;
+                const width = 4;
+                const height = 0.2;
+                const length = 8;
                 
-                // Create road segment
-                const geometry = new THREE.BoxGeometry(width, height, depth);
-                const material = new THREE.MeshStandardMaterial({
-                    color: 0x333333,
-                    roughness: 0.9,
-                });
+                const geometry = new THREE.BoxGeometry(width, height, length);
+                
+                let material;
+                
+                if (this.currentRoadTexture === 'none') {
+                    material = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(this.color),
+                        roughness: 0.9
+                    });
+                } else {
+                    const texture = this.textures.road[this.currentRoadTexture];
+                    texture.repeat.set(1, length / 2);
+                    texture.rotation = Math.PI / 2;
+                    
+                    material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        color: 0xffffff,
+                        roughness: 0.9
+                    });
+                }
                 
                 const road = new THREE.Mesh(geometry, material);
                 road.position.copy(position);
                 road.position.y = height / 2;
+                road.castShadow = false;
                 road.receiveShadow = true;
-                
-                // Add road markings
-                const lineGeometry = new THREE.BoxGeometry(width * 0.4, height * 1.1, depth * 0.1);
-                const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                const line = new THREE.Mesh(lineGeometry, lineMaterial);
-                line.position.y = height * 0.1;
-                road.add(line);
                 
                 return road;
             }
             
             createTree(position) {
                 // Create tree trunk
-                const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
+                const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.5, 2, 8);
                 const trunkMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x8B4513,
-                    roughness: 0.9,
+                    color: 0x8B4513, // Brown
+                    roughness: 0.8
                 });
                 const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
                 trunk.position.copy(position);
-                trunk.position.y = 0.75;
+                trunk.position.y = 1; // Half of trunk height
                 trunk.castShadow = true;
                 trunk.receiveShadow = true;
                 
-                // Create tree canopy
-                const canopyGeometry = new THREE.ConeGeometry(1, 2.5, 8);
-                const canopyMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x228B22,
-                    roughness: 0.8,
+                // Create tree crown
+                const crownGeometry = new THREE.ConeGeometry(2, 4, 8);
+                const crownMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(this.color),
+                    roughness: 0.8
                 });
-                const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
-                canopy.position.y = 2.5;
-                canopy.castShadow = true;
-                trunk.add(canopy);
+                const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+                crown.position.set(position.x, position.y + 3, position.z);
+                crown.castShadow = true;
+                crown.receiveShadow = true;
                 
-                return trunk;
+                // Group trunk and crown together
+                const tree = new THREE.Group();
+                tree.add(trunk);
+                tree.add(crown);
+                tree.position.copy(position);
+                tree.position.y = 0;
+                
+                return tree;
             }
             
             createBush(position) {
-                // Create bush as a sphere
-                const geometry = new THREE.SphereGeometry(0.7, 8, 6);
+                const radius = 0.7 + Math.random() * 0.5;
+                
+                // Create a bush (sphere)
+                const geometry = new THREE.SphereGeometry(radius, 8, 8);
                 const material = new THREE.MeshStandardMaterial({
-                    color: 0x228B22,
-                    roughness: 0.8,
+                    color: new THREE.Color(this.color),
+                    roughness: 0.8
                 });
                 
                 const bush = new THREE.Mesh(geometry, material);
                 bush.position.copy(position);
-                bush.position.y = 0.7;
-                bush.scale.y = 0.8;
+                bush.position.y = radius;
                 bush.castShadow = true;
                 bush.receiveShadow = true;
                 
@@ -433,59 +1036,160 @@
             }
             
             createCar(position) {
-                // Car group
+                // Create a simple car model
                 const car = new THREE.Group();
-                car.position.copy(position);
-                car.position.y = 0.6;
                 
                 // Car body
-                const bodyGeometry = new THREE.BoxGeometry(2, 0.7, 1);
+                const bodyGeometry = new THREE.BoxGeometry(2, 0.5, 4);
                 const bodyMaterial = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(this.color),
-                    roughness: 0.5,
+                    roughness: 0.7
                 });
                 const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
                 body.castShadow = true;
                 body.receiveShadow = true;
                 car.add(body);
                 
-                // Car roof
-                const roofGeometry = new THREE.BoxGeometry(1.2, 0.5, 0.9);
-                const roof = new THREE.Mesh(roofGeometry, bodyMaterial);
-                roof.position.y = 0.6;
-                roof.position.x = -0.1;
-                roof.castShadow = true;
-                car.add(roof);
+                // Car cabin
+                const cabinGeometry = new THREE.BoxGeometry(1.5, 0.8, 2);
+                const cabinMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x333333, // Dark grey
+                    roughness: 0.5
+                });
+                const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+                cabin.position.set(0, 0.65, -0.2);
+                cabin.castShadow = true;
+                cabin.receiveShadow = true;
+                car.add(cabin);
                 
                 // Wheels
-                const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
-                wheelGeometry.rotateX(Math.PI / 2);
+                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
                 const wheelMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x111111,
-                    roughness: 0.9,
+                    color: 0x333333, // Dark grey
+                    roughness: 0.8
                 });
                 
-                // Front left wheel
-                const wheelFL = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                wheelFL.position.set(0.7, -0.3, 0.5);
-                car.add(wheelFL);
+                // Front-left wheel
+                const wheel1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel1.rotation.z = Math.PI / 2;
+                wheel1.position.set(-1, -0.1, 1.2);
+                car.add(wheel1);
                 
-                // Front right wheel
-                const wheelFR = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                wheelFR.position.set(0.7, -0.3, -0.5);
-                car.add(wheelFR);
+                // Front-right wheel
+                const wheel2 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel2.rotation.z = Math.PI / 2;
+                wheel2.position.set(1, -0.1, 1.2);
+                car.add(wheel2);
                 
-                // Rear left wheel
-                const wheelRL = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                wheelRL.position.set(-0.7, -0.3, 0.5);
-                car.add(wheelRL);
+                // Rear-left wheel
+                const wheel3 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel3.rotation.z = Math.PI / 2;
+                wheel3.position.set(-1, -0.1, -1.2);
+                car.add(wheel3);
                 
-                // Rear right wheel
-                const wheelRR = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                wheelRR.position.set(-0.7, -0.3, -0.5);
-                car.add(wheelRR);
+                // Rear-right wheel
+                const wheel4 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel4.rotation.z = Math.PI / 2;
+                wheel4.position.set(1, -0.1, -1.2);
+                car.add(wheel4);
+                
+                car.position.copy(position);
+                car.position.y = 0.5;
                 
                 return car;
+            }
+            
+            saveMap() {
+                const mapData = {
+                    objects: this.objects.map(obj => obj.userData)
+                };
+                
+                const dataStr = JSON.stringify(mapData);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'map.json';
+                a.click();
+                
+                URL.revokeObjectURL(url);
+            }
+            
+            loadMap() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            try {
+                                const mapData = JSON.parse(e.target.result);
+                                this.loadMapData(mapData);
+                            } catch (error) {
+                                console.error('Error parsing map data:', error);
+                                alert('Error loading map file. Invalid format.');
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                };
+                input.click();
+            }
+            
+            loadMapData(mapData) {
+                // Clear existing objects
+                this.objects.forEach(obj => this.scene.remove(obj));
+                this.objects = [];
+                
+                // Recreate objects from saved data
+                if (mapData.objects && Array.isArray(mapData.objects)) {
+                    mapData.objects.forEach(objData => {
+                        let object;
+                        
+                        switch(objData.type) {
+                            case 'terrain':
+                                object = this.createTerrain(new THREE.Vector3(objData.position.x, 0, objData.position.z));
+                                break;
+                            case 'building':
+                                this.currentBuildingTexture = objData.texture || 'none';
+                                this.color = objData.color;
+                                object = this.createBuilding(new THREE.Vector3(objData.position.x, 0, objData.position.z));
+                                break;
+                            case 'road':
+                                this.currentRoadTexture = objData.texture || 'none';
+                                this.color = objData.color;
+                                object = this.createRoad(new THREE.Vector3(objData.position.x, 0, objData.position.z));
+                                break;
+                            case 'tree':
+                                this.color = objData.color;
+                                object = this.createTree(new THREE.Vector3(objData.position.x, 0, objData.position.z));
+                                break;
+                            case 'bush':
+                                this.color = objData.color;
+                                object = this.createBush(new THREE.Vector3(objData.position.x, 0, objData.position.z));
+                                break;
+                            case 'car':
+                                this.color = objData.color;
+                                object = this.createCar(new THREE.Vector3(objData.position.x, 0, objData.position.z));
+                                break;
+                        }
+                        
+                        if (object) {
+                            // Restore position and rotation
+                            object.position.set(objData.position.x, objData.position.y, objData.position.z);
+                            object.rotation.set(objData.rotation.x, objData.rotation.y, objData.rotation.z);
+                            
+                            // Store metadata
+                            object.userData = objData;
+                            
+                            this.scene.add(object);
+                            this.objects.push(object);
+                        }
+                    });
+                }
             }
             
             animate() {
@@ -494,17 +1198,21 @@
                 // Update controls
                 this.controls.update();
                 
-                // Render scene
+                // Render the scene
                 this.renderer.render(this.scene, this.camera);
+                
+                // Debug if needed
+                // console.log('Rendering frame');
             }
         }
-        
-        // Initialize the application when page loads
-        window.addEventListener('load', () => {
-            const app = new MapCreator();
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            // Prevent right-click menu to allow rotation
+            document.addEventListener('contextmenu', event => event.preventDefault());
             
-            // Prevent context menu on right-click
-            window.addEventListener('contextmenu', (e) => e.preventDefault());
+            // Start the application
+            const mapCreator = new EnhancedMapCreator();
         });
     </script>
 </body>
