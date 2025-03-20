@@ -543,6 +543,31 @@
                 // Store map data
                 this.map.data = mapData;
                 
+                // Convert from map creator format if needed
+                if (!mapData.name && mapData.objects) {
+                    // This is a map from the Enhanced Map Creator
+                    // Create a proper structure that matches our expected format
+                    mapData = {
+                        name: "Imported Map",
+                        version: "1.0",
+                        skyColor: "#87CEEB",
+                        fogColor: "#87CEEB",
+                        fogNear: 10,
+                        fogFar: 100,
+                        playerStart: { x: 0, y: 1.8, z: 0 },
+                        ground: {
+                            size: 100,
+                            color: "#7cba74",
+                            roughness: 0.8,
+                            metalness: 0.2
+                        },
+                        objects: mapData.objects
+                    };
+                    
+                    // Update the stored map data with converted format
+                    this.map.data = mapData;
+                }
+                
                 // Set scene properties
                 if (mapData.skyColor) {
                     this.scene.background = new THREE.Color(mapData.skyColor);
@@ -618,6 +643,15 @@
                     case 'road':
                         this.createRoad(objData);
                         break;
+                    case 'bush':
+                        this.createBush(objData);
+                        break;
+                    case 'car':
+                        this.createCar(objData);
+                        break;
+                    case 'terrain':
+                        this.createTerrain(objData);
+                        break;
                     case 'box':
                         this.createBox(objData);
                         break;
@@ -633,29 +667,116 @@
             },
             
             createBuilding: function(objData) {
-                const width = objData.size?.width || 5;
+                // Get dimensions
+                const width = objData.size?.width || 4;
                 const height = objData.size?.height || 8;
-                const depth = objData.size?.depth || 5;
+                const depth = objData.size?.depth || 4;
                 
-                const geometry = new THREE.BoxGeometry(width, height, depth);
-                const material = new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(objData.color || "#a1a1a1"),
-                    roughness: objData.roughness !== undefined ? objData.roughness : 0.7,
-                    metalness: objData.metalness !== undefined ? objData.metalness : 0.2
-                });
+                // Determine dimensions based on texture type
+                let finalWidth = width;
+                let finalHeight = height;
+                let finalDepth = depth;
+                
+                // Handle special building types from the map creator
+                if (objData.texture === 'complete') {
+                    finalWidth = 4;
+                    finalHeight = 8;
+                    finalDepth = 4;
+                } else if (objData.texture === 'residential') {
+                    finalWidth = 8;
+                    finalHeight = 12;
+                    finalDepth = 8;
+                }
+                
+                const geometry = new THREE.BoxGeometry(finalWidth, finalHeight, finalDepth);
+                
+                // Create material based on texture property if available
+                let material;
+                
+                if (objData.texture && objData.texture !== 'none') {
+                    // For textured buildings, we'll create a simple material
+                    // that approximates the look of the specified texture
+                    
+                    switch(objData.texture) {
+                        case 'brick':
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color('#b32d00'),
+                                roughness: 0.9,
+                                metalness: 0.1
+                            });
+                            break;
+                        case 'concrete':
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color('#cccccc'),
+                                roughness: 0.7,
+                                metalness: 0.3
+                            });
+                            break;
+                        case 'wood':
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color('#8B4513'),
+                                roughness: 0.8,
+                                metalness: 0.1
+                            });
+                            break;
+                        case 'complete':
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color('#e8e0d8'),
+                                roughness: 0.7,
+                                metalness: 0.2
+                            });
+                            break;
+                        case 'residential':
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color('#e0d5c0'),
+                                roughness: 0.75,
+                                metalness: 0.1
+                            });
+                            break;
+                        default:
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color(objData.color || "#a1a1a1"),
+                                roughness: objData.roughness !== undefined ? objData.roughness : 0.7,
+                                metalness: objData.metalness !== undefined ? objData.metalness : 0.2
+                            });
+                    }
+                } else {
+                    material = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(objData.color || "#a1a1a1"),
+                        roughness: objData.roughness !== undefined ? objData.roughness : 0.7,
+                        metalness: objData.metalness !== undefined ? objData.metalness : 0.2
+                    });
+                }
                 
                 const building = new THREE.Mesh(geometry, material);
-                building.position.set(
-                    objData.position?.x || 0,
-                    (objData.position?.y || 0) + height / 2,
-                    objData.position?.z || 0
-                );
+                
+                // Set position from the data or calculate based on height
+                if (objData.position) {
+                    building.position.set(
+                        objData.position.x || 0,
+                        objData.position.y || finalHeight / 2,
+                        objData.position.z || 0
+                    );
+                } else {
+                    building.position.set(0, finalHeight / 2, 0);
+                }
+                
+                // Set rotation if available
+                if (objData.rotation) {
+                    building.rotation.set(
+                        objData.rotation.x || 0,
+                        objData.rotation.y || 0,
+                        objData.rotation.z || 0
+                    );
+                }
                 
                 building.castShadow = true;
                 building.receiveShadow = true;
                 
                 this.scene.add(building);
                 this.map.objects.push(building);
+                
+                return building;
             },
             
             createTree: function(objData) {
@@ -709,30 +830,66 @@
             
             createRoad: function(objData) {
                 const width = objData.size?.width || 5;
-                const length = objData.size?.length || 100;
-                const rotation = objData.rotation !== undefined ? (objData.rotation * Math.PI / 180) : 0;
+                const length = objData.size?.length || 8;
+                const rotation = objData.rotation?.y || 0;
                 
-                const roadGeometry = new THREE.PlaneGeometry(width, length);
-                const roadMaterial = new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(objData.color || "#333333"),
-                    roughness: objData.roughness !== undefined ? objData.roughness : 0.9,
-                    metalness: objData.metalness !== undefined ? objData.metalness : 0.1
-                });
+                const roadGeometry = new THREE.BoxGeometry(width, 0.2, length);
                 
-                const road = new THREE.Mesh(roadGeometry, roadMaterial);
-                road.rotation.x = -Math.PI / 2;
-                road.rotation.z = rotation;
+                // Create material based on texture property if available
+                let material;
                 
-                road.position.set(
-                    objData.position?.x || 0,
-                    objData.position?.y || 0.01,  // Slightly above ground to prevent z-fighting
-                    objData.position?.z || 0
-                );
+                if (objData.texture && objData.texture !== 'none') {
+                    switch(objData.texture) {
+                        case 'asphalt':
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color('#222222'),
+                                roughness: 0.9,
+                                metalness: 0.1
+                            });
+                            break;
+                        case 'cobblestone':
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color('#777777'),
+                                roughness: 0.95,
+                                metalness: 0.05
+                            });
+                            break;
+                        default:
+                            material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color(objData.color || "#333333"),
+                                roughness: objData.roughness !== undefined ? objData.roughness : 0.9,
+                                metalness: objData.metalness !== undefined ? objData.metalness : 0.1
+                            });
+                    }
+                } else {
+                    material = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(objData.color || "#333333"),
+                        roughness: objData.roughness !== undefined ? objData.roughness : 0.9,
+                        metalness: objData.metalness !== undefined ? objData.metalness : 0.1
+                    });
+                }
+                
+                const road = new THREE.Mesh(roadGeometry, material);
+                
+                if (objData.position) {
+                    road.position.set(
+                        objData.position.x || 0,
+                        objData.position.y || 0.1,  // Slightly above ground to prevent z-fighting
+                        objData.position.z || 0
+                    );
+                } else {
+                    road.position.set(0, 0.1, 0);
+                }
+                
+                // Set rotation
+                road.rotation.set(0, rotation, 0);
                 
                 road.receiveShadow = true;
                 
                 this.scene.add(road);
                 this.map.objects.push(road);
+                
+                return road;
             },
             
             createBox: function(objData) {
@@ -827,6 +984,169 @@
                 this.map.objects.push(cylinder);
             },
             
+            createTerrain: function(objData) {
+                const size = objData.size || 5;
+                const height = objData.height || 2;
+                
+                // Create a simple hill
+                const geometry = new THREE.ConeGeometry(size, height, 4);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#7cba74"),
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                
+                const terrain = new THREE.Mesh(geometry, material);
+                
+                if (objData.position) {
+                    terrain.position.set(
+                        objData.position.x || 0,
+                        objData.position.y || height / 2,
+                        objData.position.z || 0
+                    );
+                } else {
+                    terrain.position.set(0, height / 2, 0);
+                }
+                
+                // Set rotation if available
+                if (objData.rotation) {
+                    terrain.rotation.set(
+                        objData.rotation.x || 0,
+                        objData.rotation.y || 0,
+                        objData.rotation.z || 0
+                    );
+                }
+                
+                terrain.castShadow = true;
+                terrain.receiveShadow = true;
+                
+                this.scene.add(terrain);
+                this.map.objects.push(terrain);
+                
+                return terrain;
+            },
+            
+            createBush: function(objData) {
+                const radius = objData.radius || 1;
+                
+                // Create a bush (sphere)
+                const geometry = new THREE.SphereGeometry(radius, 8, 8);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#2e8b57"),
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+                
+                const bush = new THREE.Mesh(geometry, material);
+                
+                if (objData.position) {
+                    bush.position.set(
+                        objData.position.x || 0,
+                        objData.position.y || radius,
+                        objData.position.z || 0
+                    );
+                } else {
+                    bush.position.set(0, radius, 0);
+                }
+                
+                bush.castShadow = true;
+                bush.receiveShadow = true;
+                
+                this.scene.add(bush);
+                this.map.objects.push(bush);
+                
+                return bush;
+            },
+            
+            createCar: function(objData) {
+                // Create a simple car model as a group
+                const car = new THREE.Group();
+                
+                // Car body
+                const bodyGeometry = new THREE.BoxGeometry(2, 0.5, 4);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(objData.color || "#ff0000"),
+                    roughness: 0.7,
+                    metalness: 0.3
+                });
+                
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.castShadow = true;
+                body.receiveShadow = true;
+                car.add(body);
+                
+                // Car top/cabin
+                const topGeometry = new THREE.BoxGeometry(1.5, 0.8, 2);
+                const topMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color("#333333"),
+                    roughness: 0.5,
+                    metalness: 0.5
+                });
+                
+                const top = new THREE.Mesh(topGeometry, topMaterial);
+                top.position.set(0, 0.65, -0.2);
+                top.castShadow = true;
+                top.receiveShadow = true;
+                car.add(top);
+                
+                // Add wheels
+                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+                const wheelMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color("#111111"),
+                    roughness: 0.9,
+                    metalness: 0.1
+                });
+                
+                // Add four wheels
+                const wheel1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel1.rotation.z = Math.PI / 2;
+                wheel1.position.set(-1, -0.1, 1.2);
+                car.add(wheel1);
+                
+                const wheel2 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel2.rotation.z = Math.PI / 2;
+                wheel2.position.set(1, -0.1, 1.2);
+                car.add(wheel2);
+                
+                const wheel3 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel3.rotation.z = Math.PI / 2;
+                wheel3.position.set(-1, -0.1, -1.2);
+                car.add(wheel3);
+                
+                const wheel4 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel4.rotation.z = Math.PI / 2;
+                wheel4.position.set(1, -0.1, -1.2);
+                car.add(wheel4);
+                
+                // Position the car
+                if (objData.position) {
+                    car.position.set(
+                        objData.position.x || 0,
+                        objData.position.y || 0.5,
+                        objData.position.z || 0
+                    );
+                } else {
+                    car.position.set(0, 0.5, 0);
+                }
+                
+                // Set rotation if available
+                if (objData.rotation) {
+                    car.rotation.set(
+                        objData.rotation.x || 0,
+                        objData.rotation.y || 0,
+                        objData.rotation.z || 0
+                    );
+                }
+                
+                car.castShadow = true;
+                car.receiveShadow = true;
+                
+                this.scene.add(car);
+                this.map.objects.push(car);
+                
+                return car;
+            },
+            
             animate: function() {
                 requestAnimationFrame(this.animate.bind(this));
                 
@@ -850,20 +1170,20 @@
                     this.velocity.y = 0;
                 }
                 
-                // Movement logic
+                // Movement logic - FIX: Correct the direction vectors
                 this.direction.z = Number(this.controls.moveForward) - Number(this.controls.moveBackward);
                 this.direction.x = Number(this.controls.moveRight) - Number(this.controls.moveLeft);
                 this.direction.normalize();
                 
-                // Calculate velocity based on direction and camera orientation
+                // Calculate velocity based on direction (W should go forward, S backward)
                 if (this.controls.moveForward || this.controls.moveBackward) {
-                    this.velocity.z = -this.direction.z * this.player.speed;
+                    this.velocity.z = this.direction.z * this.player.speed; // FIXED: Removed the negative sign
                 } else {
                     this.velocity.z = 0;
                 }
                 
                 if (this.controls.moveLeft || this.controls.moveRight) {
-                    this.velocity.x = -this.direction.x * this.player.speed;
+                    this.velocity.x = this.direction.x * this.player.speed; // FIXED: Removed the negative sign
                 } else {
                     this.velocity.x = 0;
                 }
@@ -888,8 +1208,9 @@
                 
                 const angle = Math.atan2(cameraDirection.x, cameraDirection.z);
                 
-                const finalVelocityX = moveZ * Math.sin(angle) + moveX * Math.cos(angle);
-                const finalVelocityZ = moveZ * Math.cos(angle) - moveX * Math.sin(angle);
+                // FIXED: Corrected the sign in these equations to match standard camera movement
+                const finalVelocityX = moveZ * Math.sin(angle) - moveX * Math.cos(angle);
+                const finalVelocityZ = moveZ * Math.cos(angle) + moveX * Math.sin(angle);
                 
                 // Apply movement
                 this.camera.position.x += finalVelocityX * delta;
